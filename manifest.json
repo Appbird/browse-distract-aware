@@ -3,7 +3,7 @@
   "name": "Fact Check Prompt",
   "description": "Twitter / YouTube を開いたときに、何の事実を求めているかを問いかける。",
   "version": "0.0.1",
-  "permissions": [],
+  "permissions": ["storage"],
   "content_scripts": [
     {
       "matches": [

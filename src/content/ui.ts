@@ -1,3 +1,5 @@
+import { insertFactPromptStyle } from "./ui_css";
+
 /**
  * 入力ダイアログの結果を表す型。
  */
@@ -7,70 +9,96 @@ export interface FactPromptResult {
 }
 
 /**
+ * textarea に対して、日本語入力変換中の Enter を無視しつつ、
+ * Enter で submit を呼び出すキーハンドラを付与する。
+ *
+ * @param textarea 対象の textarea。
+ * @param submit   Enter 確定時に呼び出す関数。
+ */
+function attachImeAwareEnterSubmit(
+  textarea: HTMLTextAreaElement,
+  submit: () => void,
+): void {
+  let isComposing = false;
+
+  textarea.addEventListener("compositionstart", () => {
+    isComposing = true;
+  });
+
+  textarea.addEventListener("compositionend", () => {
+    isComposing = false;
+  });
+
+  textarea.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      // 日本語変換中の Enter は無視
+      if ((event as KeyboardEvent).isComposing || isComposing) {
+        return;
+      }
+      event.preventDefault();
+      submit();
+    }
+  });
+}
+
+function attachPreviousPrompt(
+    modal:HTMLDivElement,
+    previousText: string
+): void {
+    const previous = document.createElement("div");
+    previous.className = "fp-previous";
+
+    const label = document.createElement("div");
+    label.className = "fp-previous-label";
+    label.textContent = "前回の回答";
+
+    const body = document.createElement("div");
+    body.className = "fp-previous-body";
+    body.textContent = previousText;
+
+    previous.appendChild(label);
+    previous.appendChild(body);
+    modal.appendChild(previous);
+}
+
+
+/**
  * 「何の事実を求めて来ましたか？」という問いを表示し、
  * ユーザが入力を完了するまで待機する。
  *
  * @returns ユーザの入力内容を解決する Promise。
  */
-export function showFactPrompt(): Promise<FactPromptResult> {
+export function showFactPrompt(
+  previousText?: string | null,
+): Promise<FactPromptResult> {
   return new Promise((resolve) => {
+    insertFactPromptStyle();
+
     // オーバーレイ
     const overlay = document.createElement("div");
-    overlay.style.position = "fixed";
-    overlay.style.inset = "0";
-    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
-    overlay.style.zIndex = "999999"; // だいたい何より上に来る値
-    overlay.style.display = "flex";
-    overlay.style.alignItems = "center";
-    overlay.style.justifyContent = "center";
+    overlay.className = "fp-overlay";
 
     // モーダル本体
     const modal = document.createElement("div");
-    modal.style.backgroundColor = "#ffffff";
-    modal.style.color = "#000000ff";
-    modal.style.borderRadius = "8px";
-    modal.style.padding = "16px";
-    modal.style.maxWidth = "480px";
-    modal.style.width = "90%";
-    modal.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)";
-    modal.style.fontFamily =
-      "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif";
+    modal.className = "fp-dialog";
 
     const title = document.createElement("div");
-    title.textContent = "何の不安を解消したいですか？";
-    title.style.fontSize = "16px";
-    title.style.fontWeight = "bold";
-    title.style.marginBottom = "8px";
-
-    
+    title.className = "fp-title";
+    title.textContent = "何を不安に思っていますか？";
 
     const input = document.createElement("textarea");
+    input.className = "fp-input";
     input.rows = 3;
-    input.style.width = "100%";
-    input.style.boxSizing = "border-box";
-    input.style.resize = "vertical";
-    input.style.marginBottom = "12px";
 
     const errorText = document.createElement("div");
-    errorText.style.color = "#d32f2f";
-    errorText.style.fontSize = "12px";
-    errorText.style.height = "16px";
-    errorText.style.marginBottom = "8px";
+    errorText.className = "fp-error";
 
     const buttonRow = document.createElement("div");
-    buttonRow.style.display = "flex";
-    buttonRow.style.justifyContent = "flex-end";
-    buttonRow.style.gap = "8px";
+    buttonRow.className = "fp-actions";
 
     const okButton = document.createElement("button");
+    okButton.className = "fp-button fp-button-primary";
     okButton.textContent = "OK";
-    okButton.style.padding = "6px 12px";
-    okButton.style.borderRadius = "4px";
-    okButton.style.border = "none";
-    okButton.style.cursor = "pointer";
-    okButton.style.fontSize = "13px";
-    okButton.style.backgroundColor = "#1976d2";
-    okButton.style.color = "#ffffff";
 
     // キャンセルボタンを付けず、「必ず何か書いてもらう」仕様にしている。
     // 必要になったらここに「やめる」ボタンを足せばよい。
@@ -78,6 +106,9 @@ export function showFactPrompt(): Promise<FactPromptResult> {
     buttonRow.appendChild(okButton);
 
     modal.appendChild(title);
+    if (previousText && previousText.trim().length > 0) {
+        attachPreviousPrompt(modal, previousText);
+    }
     modal.appendChild(input);
     modal.appendChild(errorText);
     modal.appendChild(buttonRow);
@@ -101,12 +132,8 @@ export function showFactPrompt(): Promise<FactPromptResult> {
 
     okButton.addEventListener("click", submit);
 
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        submit();
-      }
-    });
+    // IME 対応込みで Enter を送信キーとして扱う
+    attachImeAwareEnterSubmit(input, submit);
 
     // 初期フォーカス
     input.focus();
