@@ -15,7 +15,7 @@ export interface FactPromptResult {
  * @param textarea 対象の textarea。
  * @param submit   Enter 確定時に呼び出す関数。
  */
-function attachImeAwareEnterSubmit(
+function addImeAwareEnterListener(
   textarea: HTMLTextAreaElement,
   submit: () => void,
 ): void {
@@ -61,6 +61,18 @@ function attachPreviousPrompt(
     modal.appendChild(previous);
 }
 
+function attachOkButton(
+    buttonRow:HTMLDivElement,
+    input:HTMLTextAreaElement,
+    submit:() => void
+) {
+    const okButton = document.createElement("button");
+    okButton.className = "fp-button fp-button-primary";
+    okButton.textContent = "OK";
+    buttonRow.appendChild(okButton);
+    // IME 対応込みで Enter を送信キーとして扱う
+    addImeAwareEnterListener(input, submit);
+}
 
 /**
  * 「何の事実を求めて来ましたか？」という問いを表示し、
@@ -85,41 +97,27 @@ export function showFactPrompt(
     const title = document.createElement("div");
     title.className = "fp-title";
     title.textContent = "何を不安に思っていますか？";
+    modal.appendChild(title);
 
     const input = document.createElement("textarea");
     input.className = "fp-input";
     input.rows = 3;
+    modal.appendChild(input);
 
-    const errorText = document.createElement("div");
-    errorText.className = "fp-error";
-
-    const buttonRow = document.createElement("div");
-    buttonRow.className = "fp-actions";
-
-    const okButton = document.createElement("button");
-    okButton.className = "fp-button fp-button-primary";
-    okButton.textContent = "OK";
-
-    // キャンセルボタンを付けず、「必ず何か書いてもらう」仕様にしている。
-    // 必要になったらここに「やめる」ボタンを足せばよい。
-
-    buttonRow.appendChild(okButton);
-
-    modal.appendChild(title);
     if (previousText && previousText.trim().length > 0) {
         attachPreviousPrompt(modal, previousText);
     }
-    modal.appendChild(input);
+
+    const errorText = document.createElement("div");
+    errorText.className = "fp-error";
     modal.appendChild(errorText);
-    modal.appendChild(buttonRow);
 
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    const buttonRow = document.createElement("div");
+    buttonRow.className = "fp-actions";
+    modal.appendChild(buttonRow);    
 
-    const cleanup = () => {
-      document.body.removeChild(overlay);
-    };
-
+    // Okボタンのセットアップ
+    const cleanup = () => { document.body.removeChild(overlay); };
     const submit = () => {
       const value = input.value.trim();
       if (!value) {
@@ -129,13 +127,13 @@ export function showFactPrompt(
       cleanup();
       resolve({ text: value });
     };
+    attachOkButton(buttonRow, input, submit);
 
-    okButton.addEventListener("click", submit);
-
-    // IME 対応込みで Enter を送信キーとして扱う
-    attachImeAwareEnterSubmit(input, submit);
-
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
     // 初期フォーカス
     input.focus();
+    
   });
 }
